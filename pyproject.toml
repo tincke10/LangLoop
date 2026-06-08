@@ -1,26 +1,26 @@
 [project]
 name = "langgraph-generator-discriminator"
 version = "0.1.0"
-description = "Generator-Discriminator (Ralph Loop) reimplementado en LangGraph"
+description = "Generator-Discriminator (Ralph Loop) reimplemented in LangGraph"
 readme = "README.md"
-# Requisito del spec: Python 3.12. uv resuelve el intérprete por nosotros.
+# Spec requirement: Python 3.12. uv resolves the interpreter for us.
 requires-python = ">=3.12"
 dependencies = [
-    # El motor del grafo: StateGraph, edges condicionales, checkpointing.
+    # The graph engine: StateGraph, conditional edges, checkpointing.
     "langgraph>=0.2.0",
-    # Provider Claude como chat model idiomático (soporta with_structured_output).
+    # Claude provider as an idiomatic chat model (supports with_structured_output).
     "langchain-anthropic>=0.3.0",
-    # Tipos base de LangChain (mensajes, prompts). Lo trae langgraph igual, pero lo
-    # declaramos explícito para no depender de una transitiva.
+    # LangChain base types (messages, prompts). langgraph pulls it in anyway, but we
+    # declare it explicitly so we don't depend on a transitive.
     "langchain-core>=0.3.0",
-    # State tipado y structured output del discriminator.
+    # Typed State and the discriminator's structured output.
     "pydantic>=2.0",
-    # Carga ANTHROPIC_API_KEY desde .env sin ensuciar el entorno global.
+    # Loads ANTHROPIC_API_KEY from .env without polluting the global environment.
     "python-dotenv>=1.0",
 ]
 
 [project.scripts]
-# Permite correr el demo con `uv run gd-loop` además de `uv run python -m ...`.
+# Lets you run the demo with `uv run gd-loop` besides `uv run python -m ...`.
 gd-loop = "generator_discriminator.main:main"
 
 [build-system]
@@ -29,3 +29,15 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/generator_discriminator"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
+
+[tool.pytest.ini_options]
+# `pythonpath = ["tests"]` makes the shared fakes (tests/fakes.py) importable as `fakes`.
+# The package itself is already installed editable, so it needs no extra path.
+testpaths = ["tests"]
+pythonpath = ["tests"]
+addopts = "-v"
