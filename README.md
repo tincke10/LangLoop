@@ -1,5 +1,7 @@
 # langgraph-generator-discriminator
 
+[![CI](https://github.com/tincke10/LangLoop/actions/workflows/ci.yml/badge.svg)](https://github.com/tincke10/LangLoop/actions/workflows/ci.yml)
+
 A **LangGraph** reimplementation of the **Generator-Discriminator (Ralph Loop)** pattern:
 an iterative quality-improvement loop where a generator produces content and a
 discriminator evaluates it, repeating until it reaches a quality threshold or an iteration
