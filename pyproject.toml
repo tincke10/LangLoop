@@ -1,0 +1,31 @@
+[project]
+name = "langgraph-generator-discriminator"
+version = "0.1.0"
+description = "Generator-Discriminator (Ralph Loop) reimplementado en LangGraph"
+readme = "README.md"
+# Requisito del spec: Python 3.12. uv resuelve el intérprete por nosotros.
+requires-python = ">=3.12"
+dependencies = [
+    # El motor del grafo: StateGraph, edges condicionales, checkpointing.
+    "langgraph>=0.2.0",
+    # Provider Claude como chat model idiomático (soporta with_structured_output).
+    "langchain-anthropic>=0.3.0",
+    # Tipos base de LangChain (mensajes, prompts). Lo trae langgraph igual, pero lo
+    # declaramos explícito para no depender de una transitiva.
+    "langchain-core>=0.3.0",
+    # State tipado y structured output del discriminator.
+    "pydantic>=2.0",
+    # Carga ANTHROPIC_API_KEY desde .env sin ensuciar el entorno global.
+    "python-dotenv>=1.0",
+]
+
+[project.scripts]
+# Permite correr el demo con `uv run gd-loop` además de `uv run python -m ...`.
+gd-loop = "generator_discriminator.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/generator_discriminator"]

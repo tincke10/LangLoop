@@ -1,0 +1,17 @@
+# Secrets — NUNCA al repo
+.env
+
+# uv / Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.python-version
+
+# Tooling
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# OS
+.DS_Store
