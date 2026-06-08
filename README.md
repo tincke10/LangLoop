@@ -86,7 +86,7 @@ score, and the router's decision (continue or stop).
 
 ---
 
-## LangGraph key concepts (interview refresher)
+## Concepts
 
 ### 1. StateGraph
 The central structure. A directed graph where you declare **nodes** (work) and **edges**
@@ -145,12 +145,8 @@ human-in-the-loop. In production you'd use `SqliteSaver` / `PostgresSaver`.
 | (you didn't have) state persistence/resume                 | **Checkpointing** with `MemorySaver`                        |
 | Scattered `console.log`                                    | Per-transition logging in every node + the router           |
 
-The interview takeaway: **the pattern is the same; LangGraph formalizes it and gives you,
-for free, explicit topology, checkpointing and structured output.**
 
----
 
-## 5 interview questions (with answers)
 
 **1. Why LangGraph and not a LangChain chain for this problem?**
 Because a chain is an **acyclic** graph (a DAG): it goes from A to B to C with no going
@@ -187,13 +183,3 @@ With `llm.with_structured_output(Evaluation)`, where `Evaluation` is a Pydantic 
 validates types and ranges. If the model tried to return something invalid, validation fails
 instead of propagating corrupt data. That's the difference from parsing the string by hand,
 which is fragile.
-
----
-
-## Stack
-
-- **Python 3.12** + **uv**
-- **langgraph** (StateGraph, conditional edges, MemorySaver)
-- **langchain-anthropic** (`ChatAnthropic`, `with_structured_output`)
-- **pydantic** (typed State + structured output)
-- **python-dotenv** (loads `ANTHROPIC_API_KEY`)
