@@ -1,4 +1,4 @@
-"""Generator-Discriminator (Ralph Loop) reimplementado en LangGraph."""
+"""Generator-Discriminator (Ralph Loop) reimplemented in LangGraph."""
 
 from .graph import build_graph
 from .state import Evaluation, GraphState

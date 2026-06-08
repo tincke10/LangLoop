@@ -1,7 +1,7 @@
-"""Entrypoint del demo. Carga el .env, arma el grafo y corre el loop.
+"""Demo entrypoint. Loads the .env, builds the graph and runs the loop.
 
-Corré con:  uv run gd-loop
-        o:  uv run python -m generator_discriminator.main
+Run with:  uv run gd-loop
+      or:  uv run python -m generator_discriminator.main
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from .graph import build_graph
 
 
 def _configure_logging() -> None:
-    """Logging básico de cada transición (requisito del spec)."""
+    """Basic logging of every transition (spec requirement)."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s | %(levelname)-5s | %(message)s",
@@ -25,49 +25,49 @@ def _configure_logging() -> None:
 
 
 def main() -> None:
-    # 1) Cargar ANTHROPIC_API_KEY (y GD_MODEL si está) desde .env ANTES de tocar el LLM.
+    # 1) Load ANTHROPIC_API_KEY (and GD_MODEL if present) from .env BEFORE touching the LLM.
     load_dotenv()
     _configure_logging()
 
     if not os.getenv("ANTHROPIC_API_KEY"):
-        print("ERROR: falta ANTHROPIC_API_KEY. Copiá env.example a .env y completá la key.")
+        print("ERROR: ANTHROPIC_API_KEY is missing. Copy env.example to .env and fill in the key.")
         sys.exit(1)
 
-    # 2) Armar la app (grafo compilado con checkpointer).
+    # 2) Build the app (graph compiled with a checkpointer).
     app = build_graph()
 
-    # 3) thread_id: identifica esta corrida en el checkpointer. Con el mismo thread_id
-    #    podrías reanudar/inspeccionar el estado guardado. Es OBLIGATORIO cuando hay
-    #    checkpointer compilado.
+    # 3) thread_id: identifies this run in the checkpointer. With the same thread_id you
+    #    could resume/inspect the saved state. It's REQUIRED whenever the compiled graph
+    #    has a checkpointer.
     config = {"configurable": {"thread_id": "demo-1"}}
 
-    # 4) Estado inicial. Solo seteamos lo que el usuario aporta; el resto usa los
-    #    defaults del modelo Pydantic (draft="", score=0, iteration=0, ...).
+    # 4) Initial state. We only set what the user provides; the rest uses the Pydantic
+    #    model defaults (draft="", score=0, iteration=0, ...).
     initial_state = {
-        "task": "Escribí un párrafo claro y atractivo explicando qué es LangGraph "
-        "y por qué sirve para flujos cíclicos con LLMs.",
+        "task": "Write a clear and engaging paragraph explaining what LangGraph is "
+        "and why it's useful for cyclic LLM workflows.",
         "max_iterations": 5,
         "threshold": 85,
     }
 
     print("=" * 70)
-    print("GENERATOR–DISCRIMINATOR LOOP (Ralph Loop en LangGraph)")
+    print("GENERATOR-DISCRIMINATOR LOOP (Ralph Loop in LangGraph)")
     print("=" * 70)
-    print(f"Tarea: {initial_state['task']}\n")
+    print(f"Task: {initial_state['task']}\n")
 
-    # 5) invoke() corre el grafo hasta llegar a END y devuelve el State final (dict).
+    # 5) invoke() runs the graph until it reaches END and returns the final State (dict).
     final_state = app.invoke(initial_state, config=config)
 
-    # 6) Reporte de la corrida.
+    # 6) Run report.
     print("\n" + "=" * 70)
-    print("EVOLUCIÓN DEL LOOP")
+    print("LOOP EVOLUTION")
     print("=" * 70)
     for entry in final_state["history"]:
-        print(f"  iteración {entry['iteration']}: score={entry['score']}")
+        print(f"  iteration {entry['iteration']}: score={entry['score']}")
         print(f"      feedback: {entry['feedback']}")
 
     print("\n" + "=" * 70)
-    print(f"RESULTADO FINAL  (score={final_state['score']}, iteraciones={final_state['iteration']})")
+    print(f"FINAL RESULT  (score={final_state['score']}, iterations={final_state['iteration']})")
     print("=" * 70)
     print(final_state["draft"])
 

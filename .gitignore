@@ -1,4 +1,4 @@
-# Secrets — NUNCA al repo
+# Secrets — NEVER commit
 .env
 
 # uv / Python

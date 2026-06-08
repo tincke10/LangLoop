@@ -1,9 +1,9 @@
-"""Los nodos del grafo: generator y discriminator.
+"""The graph nodes: generator and discriminator.
 
-CONCEPTO CLAVE (#2 del modelo mental):
-Un nodo es SOLO una función `(state) -> dict`. Recibe el State completo, hace su
-laburo, y devuelve un diccionario con los campos que quiere actualizar. LangGraph
-mergea ese dict al State. No devolvés el State entero: devolvés el PARCHE.
+KEY CONCEPT (#2 of the mental model):
+A node is JUST a function `(state) -> dict`. It receives the whole State, does its work,
+and returns a dictionary with the fields it wants to update. LangGraph merges that dict
+into the State. You don't return the whole State: you return the PATCH.
 """
 
 from __future__ import annotations
@@ -20,64 +20,63 @@ logger = logging.getLogger(__name__)
 
 
 def _make_llm() -> ChatAnthropic:
-    """Construye el chat model de Claude.
+    """Build the Claude chat model.
 
-    Por qué una función y no una constante global: para leer GD_MODEL DESPUÉS de que
-    main.py haya corrido load_dotenv(). Si lo instanciáramos al importar el módulo,
-    el .env todavía no estaría cargado.
+    Why a function and not a module-level constant: so we read GD_MODEL AFTER main.py has
+    run load_dotenv(). If we instantiated it at import time, the .env wouldn't be loaded yet.
     """
     model = os.getenv("GD_MODEL", "claude-sonnet-4-6")
-    # temperature alta-ish en el generator favorece variedad entre iteraciones;
-    # acá usamos un valor medio que sirve para ambos nodos.
+    # A medium-high temperature in the generator favors variety across iterations;
+    # here we use a middle value that works for both nodes.
     return ChatAnthropic(model=model, temperature=0.7, max_tokens=1024)
 
 
 # ---------------------------------------------------------------------------
-# NODO 1: GENERATOR
+# NODE 1: GENERATOR
 # ---------------------------------------------------------------------------
 def generator_node(state: GraphState) -> dict:
-    """Genera (o MEJORA) el draft.
+    """Generate (or IMPROVE) the draft.
 
-    - Iteración 1 (sin feedback todavía): genera desde cero a partir de la task.
-    - Iteraciones siguientes: recibe el feedback del discriminator y MEJORA el draft.
+    - Iteration 1 (no feedback yet): generate from scratch from the task.
+    - Following iterations: take the discriminator's feedback and IMPROVE the draft.
 
-    Este "recibo feedback y vuelvo a generar" es exactamente el lado izquierdo de
-    tu Ralph Loop en Barto-MCP. La diferencia: acá no hay un `while`, lo orquesta
-    el grafo vía el edge condicional (ver graph.py).
+    This "take feedback and generate again" is exactly the left-hand side of your Ralph
+    Loop in Barto-MCP. The difference: here there's no `while`, the graph orchestrates it
+    via the conditional edge (see graph.py).
     """
     llm = _make_llm()
     next_iteration = state.iteration + 1
 
     system = SystemMessage(
         content=(
-            "Sos un escritor experto. Producí contenido claro, preciso y bien estructurado. "
-            "Devolvé SOLO el contenido pedido, sin preámbulos ni meta-comentarios."
+            "You are an expert writer. Produce clear, precise, well-structured content. "
+            "Return ONLY the requested content, with no preamble or meta-commentary."
         )
     )
 
     if state.feedback:
-        # Hay feedback de una ronda anterior -> modo MEJORA.
+        # There is feedback from a previous round -> IMPROVE mode.
         human = HumanMessage(
             content=(
-                f"Tarea: {state.task}\n\n"
-                f"Tu borrador anterior fue:\n{state.draft}\n\n"
-                f"Un evaluador lo calificó {state.score}/100 con este feedback:\n{state.feedback}\n\n"
-                "Reescribí el contenido aplicando el feedback para subir la calidad."
+                f"Task: {state.task}\n\n"
+                f"Your previous draft was:\n{state.draft}\n\n"
+                f"A reviewer scored it {state.score}/100 with this feedback:\n{state.feedback}\n\n"
+                "Rewrite the content applying the feedback to raise the quality."
             )
         )
         mode = "improve"
     else:
-        # Primera pasada -> modo GENERACIÓN desde cero.
-        human = HumanMessage(content=f"Tarea: {state.task}\n\nEscribí el contenido pedido.")
+        # First pass -> generate from scratch.
+        human = HumanMessage(content=f"Task: {state.task}\n\nWrite the requested content.")
         mode = "generate"
 
     response = llm.invoke([system, human])
     draft = response.content if isinstance(response.content, str) else str(response.content)
 
-    # Logging de la transición (requisito del spec): qué nodo corrió + en qué iteración.
-    logger.info("[generator] mode=%s iteration=%d -> draft de %d chars", mode, next_iteration, len(draft))
+    # Log the transition (spec requirement): which node ran + on which iteration.
+    logger.info("[generator] mode=%s iteration=%d -> draft of %d chars", mode, next_iteration, len(draft))
 
-    # Devolvemos el PARCHE. No tocamos score/feedback acá: eso es laburo del discriminator.
+    # Return the PATCH. We don't touch score/feedback here: that's the discriminator's job.
     return {
         "draft": draft,
         "iteration": next_iteration,
@@ -85,32 +84,32 @@ def generator_node(state: GraphState) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# NODO 2: DISCRIMINATOR
+# NODE 2: DISCRIMINATOR
 # ---------------------------------------------------------------------------
 def discriminator_node(state: GraphState) -> dict:
-    """Evalúa el draft y devuelve score + feedback ESTRUCTURADOS.
+    """Evaluate the draft and return a STRUCTURED score + feedback.
 
-    Acá está el requisito duro: with_structured_output(Evaluation). El LLM queda
-    obligado a devolver un objeto Evaluation válido (score 0-100 + feedback), no un
-    string suelto. En Barto-MCP esto lo parseabas a mano; acá lo garantiza el framework.
+    Here's the hard requirement: with_structured_output(Evaluation). The LLM is forced to
+    return a valid Evaluation object (score 0-100 + feedback), not a loose string. In
+    Barto-MCP you parsed this by hand; here the framework guarantees it.
     """
     llm = _make_llm()
-    # .with_structured_output() envuelve al modelo: en vez de texto, devuelve una
-    # instancia de Evaluation (usa tool-calling de Anthropic por debajo).
+    # .with_structured_output() wraps the model: instead of text, it returns an instance
+    # of Evaluation (it uses Anthropic's tool-calling under the hood).
     evaluator = llm.with_structured_output(Evaluation)
 
     system = SystemMessage(
         content=(
-            "Sos un evaluador de calidad exigente pero justo. Calificás contenido de 0 a 100 "
-            "según claridad, precisión, estructura y qué tan bien cumple la tarea pedida. "
-            "Sé concreto en el feedback: decí QUÉ mejorar, no generalidades."
+            "You are a demanding but fair quality reviewer. You score content from 0 to 100 "
+            "based on clarity, accuracy, structure, and how well it fulfills the requested task. "
+            "Be concrete in your feedback: say WHAT to improve, not generalities."
         )
     )
     human = HumanMessage(
         content=(
-            f"Tarea original: {state.task}\n\n"
-            f"Contenido a evaluar:\n{state.draft}\n\n"
-            "Calificá de 0 a 100 y dame feedback accionable."
+            f"Original task: {state.task}\n\n"
+            f"Content to evaluate:\n{state.draft}\n\n"
+            "Score it from 0 to 100 and give actionable feedback."
         )
     )
 
@@ -123,7 +122,7 @@ def discriminator_node(state: GraphState) -> dict:
         state.threshold,
     )
 
-    # Acumulamos el snapshot de esta ronda en history (leer + append + devolver lista nueva).
+    # Accumulate this round's snapshot into history (read + append + return new list).
     new_history = state.history + [
         {
             "iteration": state.iteration,

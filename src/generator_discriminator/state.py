@@ -1,15 +1,15 @@
-"""State tipado del grafo + schema de salida estructurada del discriminator.
+"""Typed graph state + the discriminator's structured-output schema.
 
-CONCEPTO CLAVE (#1 del modelo mental):
-En LangGraph los nodos NO se pasan datos como argumentos de función. Existe UN
-objeto de estado compartido que vive durante toda la corrida del grafo. Cada nodo
-lo lee y devuelve un "parche" (dict) con los campos que quiere actualizar; LangGraph
-mergea ese parche al estado. Es Redux: el State es el store, cada nodo es un reducer.
+KEY CONCEPT (#1 of the mental model):
+In LangGraph nodes do NOT pass data to each other as function arguments. There is ONE
+shared state object that lives for the whole graph run. Each node reads it and returns a
+"patch" (a dict) with the fields it wants to update; LangGraph merges that patch into the
+state. Think Redux: the State is the store, each node is a reducer.
 
-Por qué Pydantic y no un TypedDict:
-- Validación en runtime (score 0-100 garantizado, no un int cualquiera).
-- Defaults declarativos (iteration arranca en 0 sin que nadie lo setee).
-- Es el MISMO modelo que reusamos para el structured output del discriminator.
+Why Pydantic instead of a TypedDict:
+- Runtime validation (score 0-100 guaranteed, not just any int).
+- Declarative defaults (iteration starts at 0 without anyone setting it).
+- It's the SAME model we reuse for the discriminator's structured output.
 """
 
 from __future__ import annotations
@@ -18,58 +18,58 @@ from pydantic import BaseModel, Field
 
 
 class Evaluation(BaseModel):
-    """Salida ESTRUCTURADA del discriminator.
+    """STRUCTURED output of the discriminator.
 
-    Este modelo es el contrato que le pasamos a `llm.with_structured_output(Evaluation)`.
-    El provider (Claude) queda OBLIGADO a devolver exactamente {score, feedback} con
-    los tipos correctos. Adiós a parsear un string a mano rezando que venga el JSON bien.
+    This model is the contract we hand to `llm.with_structured_output(Evaluation)`.
+    The provider (Claude) is FORCED to return exactly {score, feedback} with the right
+    types. No more parsing a string by hand and praying the JSON comes back well-formed.
 
-    En Barto-MCP esto lo hacías a mano: el discriminator devolvía texto y vos lo
-    parseabas. Acá el framework + Pydantic te lo garantizan tipado.
+    In Barto-MCP you did this by hand: the discriminator returned text and you parsed it.
+    Here the framework + Pydantic guarantee it typed.
     """
 
     score: int = Field(
         ...,
         ge=0,
         le=100,
-        description="Calidad del draft de 0 a 100. 100 = perfecto, cumple todos los criterios.",
+        description="Draft quality from 0 to 100. 100 = perfect, meets every criterion.",
     )
     feedback: str = Field(
         ...,
         description=(
-            "Crítica concreta y accionable: qué falta o qué mejorar para subir el score. "
-            "Si el score ya es alto, explicá brevemente por qué está bien."
+            "Concrete, actionable critique: what is missing or what to improve to raise the score. "
+            "If the score is already high, briefly explain why it's good."
         ),
     )
 
 
 class GraphState(BaseModel):
-    """El estado compartido que fluye por TODO el grafo.
+    """The shared state that flows through the ENTIRE graph.
 
-    Cada campo es un "canal" que los nodos leen y escriben. Mirá cómo cada uno
-    mapea 1:1 con un requisito del spec.
+    Each field is a "channel" that nodes read from and write to. Notice how each one maps
+    1:1 to a requirement of the spec.
     """
 
-    # --- Input del usuario ---
-    task: str = Field(..., description="La consigna. Ej: 'escribí un párrafo sobre X'.")
+    # --- User input ---
+    task: str = Field(..., description="The prompt. E.g. 'write a paragraph about X'.")
 
-    # --- Lo que produce el generator ---
-    draft: str = Field(default="", description="El contenido generado en la última iteración.")
+    # --- Produced by the generator ---
+    draft: str = Field(default="", description="The content generated in the latest iteration.")
 
-    # --- Lo que produce el discriminator (structured output) ---
-    score: int = Field(default=0, description="Último score 0-100 dado por el discriminator.")
-    feedback: str = Field(default="", description="Último feedback. El generator lo usa para mejorar.")
+    # --- Produced by the discriminator (structured output) ---
+    score: int = Field(default=0, description="Latest 0-100 score given by the discriminator.")
+    feedback: str = Field(default="", description="Latest feedback. The generator uses it to improve.")
 
-    # --- Control del loop ---
-    iteration: int = Field(default=0, description="Cuántas veces corrió el generator. El guard lo usa.")
-    max_iterations: int = Field(default=5, description="Tope duro de iteraciones. Evita loops infinitos.")
-    threshold: int = Field(default=85, description="Score mínimo para cortar y dar el draft por bueno.")
+    # --- Loop control ---
+    iteration: int = Field(default=0, description="How many times the generator ran. The guard uses it.")
+    max_iterations: int = Field(default=5, description="Hard cap on iterations. Prevents infinite loops.")
+    threshold: int = Field(default=85, description="Minimum score to stop and accept the draft as good.")
 
-    # --- Trazabilidad ---
-    # Acumulamos un snapshot por iteración para poder mostrar la evolución del loop.
-    # Lo manejamos a mano en los nodos (leer history, append, devolver la lista nueva)
-    # en vez de usar un reducer Annotated: más explícito y más fácil de defender.
+    # --- Traceability ---
+    # We accumulate one snapshot per iteration so we can show how the loop evolved.
+    # We manage it by hand in the nodes (read history, append, return the new list)
+    # instead of using an Annotated reducer: more explicit and easier to defend.
     history: list[dict] = Field(
         default_factory=list,
-        description="Un registro por iteración: {iteration, score, feedback}.",
+        description="One record per iteration: {iteration, score, feedback}.",
     )

@@ -1,9 +1,9 @@
-"""Construcción del StateGraph: nodos + edges + ciclo + checkpointing.
+"""StateGraph construction: nodes + edges + cycle + checkpointing.
 
-CONCEPTOS CLAVE (#3 y #4 del modelo mental):
-- Edges = el flujo de control. Hay fijos (add_edge) y condicionales (add_conditional_edges).
-- El edge condicional es lo que crea el CICLO: vuelve de discriminator a generator.
-  Eso es lo que una chain lineal de LangChain NO puede hacer. Es la razón de ser de LangGraph.
+KEY CONCEPTS (#3 and #4 of the mental model):
+- Edges = the control flow. There are fixed ones (add_edge) and conditional ones (add_conditional_edges).
+- The conditional edge is what creates the CYCLE: it loops back from discriminator to generator.
+  That's what a linear LangChain chain CANNOT do. It's LangGraph's whole reason to exist.
 """
 
 from __future__ import annotations
@@ -20,16 +20,16 @@ logger = logging.getLogger(__name__)
 
 
 def should_continue(state: GraphState) -> str:
-    """La FUNCIÓN DE DECISIÓN del edge condicional. El cerebro del loop.
+    """The DECISION function of the conditional edge. The brain of the loop.
 
-    Mira el State y devuelve una etiqueta ("end" o "generator"). LangGraph usa esa
-    etiqueta para saber a qué nodo saltar. Esto reemplaza, de forma DECLARATIVA, el
-    `if (score >= threshold || iteration >= max) break;` que en Barto-MCP vivía
-    enterrado dentro de un `while`.
+    It looks at the State and returns a label ("end" or "generator"). LangGraph uses that
+    label to know which node to jump to. This replaces, declaratively, the
+    `if (score >= threshold || iteration >= max) break;` that in Barto-MCP lived buried
+    inside a `while`.
 
-    Dos condiciones de corte (la segunda es el guard anti-loop-infinito del spec):
-      1. score >= threshold  -> el draft ya está lo bastante bueno.
-      2. iteration >= max_iterations -> agotamos los intentos; cortamos igual.
+    Two stop conditions (the second is the spec's anti-infinite-loop guard):
+      1. score >= threshold  -> the draft is already good enough.
+      2. iteration >= max_iterations -> we ran out of attempts; stop anyway.
     """
     if state.score >= state.threshold:
         logger.info("[router] score %d >= threshold %d -> END", state.score, state.threshold)
@@ -37,55 +37,55 @@ def should_continue(state: GraphState) -> str:
 
     if state.iteration >= state.max_iterations:
         logger.info(
-            "[router] iteration %d >= max %d -> END (guard anti loop infinito)",
+            "[router] iteration %d >= max %d -> END (anti infinite-loop guard)",
             state.iteration,
             state.max_iterations,
         )
         return "end"
 
-    logger.info("[router] score %d < threshold -> vuelvo a GENERATOR con el feedback", state.score)
+    logger.info("[router] score %d < threshold -> back to GENERATOR with the feedback", state.score)
     return "generator"
 
 
 def build_graph():
-    """Arma y compila el grafo. Devuelve una app ejecutable (.invoke / .stream)."""
+    """Build and compile the graph. Returns a runnable app (.invoke / .stream)."""
 
-    # 1) Creamos el grafo declarando QUÉ schema de estado usa. Así LangGraph sabe
-    #    cómo hidratar/validar el State en cada nodo (lo convierte a GraphState).
+    # 1) Create the graph declaring WHICH state schema it uses. This lets LangGraph know
+    #    how to hydrate/validate the State at each node (it coerces it to GraphState).
     workflow = StateGraph(GraphState)
 
-    # 2) Registramos los nodos. Nombre lógico -> función. (add_node del spec)
+    # 2) Register the nodes. Logical name -> function. (spec's add_node)
     workflow.add_node("generator", generator_node)
     workflow.add_node("discriminator", discriminator_node)
 
-    # 3) Punto de entrada: por dónde arranca el grafo. (set_entry_point del spec)
+    # 3) Entry point: where the graph starts. (spec's set_entry_point)
     workflow.set_entry_point("generator")
 
-    # 4) Edge FIJO: después del generator SIEMPRE vamos al discriminator.
-    #    No hay decisión que tomar acá: generaste -> te evalúan.
+    # 4) FIXED edge: after the generator we ALWAYS go to the discriminator.
+    #    There's no decision to make here: you generated -> you get evaluated.
     workflow.add_edge("generator", "discriminator")
 
-    # 5) Edge CONDICIONAL: el ciclo. (add_conditional_edges del spec)
-    #    Después del discriminator corremos should_continue(state). Según devuelva:
-    #      "generator" -> volvemos a generar (CIERRA EL CICLO)
-    #      "end"       -> terminamos
-    #    El tercer argumento es el "mapa": etiqueta -> destino real.
+    # 5) CONDITIONAL edge: the cycle. (spec's add_conditional_edges)
+    #    After the discriminator we run should_continue(state). Depending on what it returns:
+    #      "generator" -> generate again (CLOSES THE CYCLE)
+    #      "end"       -> we're done
+    #    The third argument is the "map": label -> actual destination.
     workflow.add_conditional_edges(
         "discriminator",
         should_continue,
         {
-            "generator": "generator",  # <- esta flecha de vuelta es el CICLO
-            "end": END,                # END es el nodo terminal especial de LangGraph
+            "generator": "generator",  # <- this loop-back arrow is the CYCLE
+            "end": END,                # END is LangGraph's special terminal node
         },
     )
 
-    # 6) Checkpointing (requisito del spec): MemorySaver guarda un snapshot del State
-    #    después de CADA nodo, en memoria, indexado por thread_id. Esto te da:
-    #      - persistencia del estado entre pasos
-    #      - poder reanudar / inspeccionar el historial de la corrida
-    #      - base para human-in-the-loop y time-travel
-    #    (En prod usarías SqliteSaver/PostgresSaver; MemorySaver es para demo/tests.)
+    # 6) Checkpointing (spec requirement): MemorySaver stores a snapshot of the State
+    #    after EVERY node, in memory, indexed by thread_id. This gives you:
+    #      - state persistence between steps
+    #      - the ability to resume / inspect the run history
+    #      - the foundation for human-in-the-loop and time-travel
+    #    (In production you'd use SqliteSaver/PostgresSaver; MemorySaver is for demo/tests.)
     checkpointer = MemorySaver()
 
-    # 7) compile() congela la topología y nos da la app ejecutable.
+    # 7) compile() freezes the topology and gives us the runnable app.
     return workflow.compile(checkpointer=checkpointer)
