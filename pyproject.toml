@@ -36,8 +36,9 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-# `pythonpath = ["tests"]` makes the shared fakes (tests/fakes.py) importable as `fakes`.
-# The package itself is already installed editable, so it needs no extra path.
+# `src` makes the package importable straight from source, independent of the editable
+# install (which is fragile with a src/ layout). `tests` makes the shared fakes
+# (tests/fakes.py) importable as `fakes`.
 testpaths = ["tests"]
-pythonpath = ["tests"]
+pythonpath = ["src", "tests"]
 addopts = "-v"
