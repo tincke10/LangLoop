@@ -8,8 +8,12 @@ requires-python = ">=3.12"
 dependencies = [
     # The graph engine: StateGraph, conditional edges, checkpointing.
     "langgraph>=0.2.0",
+    # Provider-agnostic model factory (init_chat_model) lives here.
+    "langchain>=0.3.0",
     # Claude provider as an idiomatic chat model (supports with_structured_output).
     "langchain-anthropic>=0.3.0",
+    # OpenAI-compatible provider (needed for DeepSeek via MODEL_PROVIDER=openai).
+    "langchain-openai>=0.2.0",
     # LangChain base types (messages, prompts). langgraph pulls it in anyway, but we
     # declare it explicitly so we don't depend on a transitive.
     "langchain-core>=0.3.0",

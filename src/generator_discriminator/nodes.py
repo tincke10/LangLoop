@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import os
 
-from langchain_anthropic import ChatAnthropic
+from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from .state import Evaluation, GraphState
@@ -19,16 +19,40 @@ from .state import Evaluation, GraphState
 logger = logging.getLogger(__name__)
 
 
-def _make_llm() -> ChatAnthropic:
-    """Build the Claude chat model.
+def _make_llm():
+    """Build the chat model.
 
-    Why a function and not a module-level constant: so we read GD_MODEL AFTER main.py has
+    Why a function and not a module-level constant: so we read the env vars AFTER main.py has
     run load_dotenv(). If we instantiated it at import time, the .env wouldn't be loaded yet.
+
+    init_chat_model is the provider-agnostic factory: it takes a model name string plus the
+    model_provider and returns the right ChatModel instance. This lets the model, provider,
+    API key, and base URL all be swapped via env vars (see env.example).
     """
-    model = os.getenv("GD_MODEL", "claude-sonnet-4-6")
+    model = os.getenv("MODEL", "claude-sonnet-4-6")
+    model_provider = os.getenv("MODEL_PROVIDER", "anthropic")
+    api_key = os.getenv("API_KEY") or os.getenv("ANTHROPIC_API_KEY")
+    base_url = os.getenv("BASE_URL")
+
     # A medium-high temperature in the generator favors variety across iterations;
     # here we use a middle value that works for both nodes.
-    return ChatAnthropic(model=model, temperature=0.7, max_tokens=1024)
+    kwargs: dict = {
+        "model": model,
+        "model_provider": model_provider,
+        "temperature": 0.7,
+        "max_tokens": 1024,
+    }
+    if api_key:
+        kwargs["api_key"] = api_key
+    if base_url:
+        kwargs["base_url"] = base_url
+
+    # Thinking mode is incompatible with the forced tool_choice used by the discriminator's
+    # structured output, so we disable it for the anthropic provider.
+    if model_provider == "anthropic":
+        kwargs["thinking"] = {"type": "disabled"}
+
+    return init_chat_model(**kwargs)
 
 
 # ---------------------------------------------------------------------------

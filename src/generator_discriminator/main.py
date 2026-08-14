@@ -29,8 +29,12 @@ def main() -> None:
     load_dotenv()
     _configure_logging()
 
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        print("ERROR: ANTHROPIC_API_KEY is missing. Copy env.example to .env and fill in the key.")
+    # Accept either the provider-specific API_KEY or the legacy ANTHROPIC_API_KEY.
+    if not (os.getenv("API_KEY") or os.getenv("ANTHROPIC_API_KEY")):
+        print(
+            "ERROR: API key is missing. Copy env.example to .env and set API_KEY "
+            "(or ANTHROPIC_API_KEY as fallback)."
+        )
         sys.exit(1)
 
     # 2) Build the app (graph compiled with a checkpointer).
